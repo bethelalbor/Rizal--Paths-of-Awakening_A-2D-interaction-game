@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using TMPro;
+using Unity.Cinemachine;
 
 public class DogPuzzleManager : MonoBehaviour
 {
@@ -51,6 +52,12 @@ public class DogPuzzleManager : MonoBehaviour
     public string dogBiteTriggerName = "bite";
     public string dogIdleStateName = "dog_idle";
     public float biteAnimationDuration = 1.2f;
+
+    [Header("Camera Pan")]
+    public CinemachineCamera cinemachineCamera;
+    public Transform rizalCameraTarget;
+    public Transform dogCameraTarget;
+    public float cameraHoldDuration = 1.5f;
 
     [Header("Testing")]
     public bool activateDogDangerAtStartForTesting = false;
@@ -110,30 +117,47 @@ public class DogPuzzleManager : MonoBehaviour
 
     private IEnumerator PlayDogIntroRoutine()
     {
-        if (captionPanel != null)
-            captionPanel.SetActive(true);
-
-        if (captionText != null)
-            captionText.text = pacianoWarningLine;
-
-        if (voiceSource != null && pacianoWarningVoice != null)
-        {
-            voiceSource.Stop();
-            voiceSource.clip = pacianoWarningVoice;
-            voiceSource.Play();
-        }
-
-        yield return new WaitForSeconds(warningDuration);
-
-        if (voiceSource != null && voiceSource.isPlaying)
-            voiceSource.Stop();
-
-        if (captionPanel != null)
-            captionPanel.SetActive(false);
-
-        ActivateDogDanger();
+    // Pan camera to the dog first
+    if (cinemachineCamera != null && dogCameraTarget != null)
+    {
+        cinemachineCamera.Follow = dogCameraTarget;
     }
 
+    yield return new WaitForSeconds(cameraHoldDuration);
+
+    if (captionPanel != null)
+        captionPanel.SetActive(true);
+
+    if (captionText != null)
+        captionText.text = pacianoWarningLine;
+
+    if (voiceSource != null && pacianoWarningVoice != null)
+    {
+        voiceSource.Stop();
+        voiceSource.clip = pacianoWarningVoice;
+        voiceSource.Play();
+
+        yield return new WaitForSeconds(pacianoWarningVoice.length);
+    }
+    else
+    {
+        yield return new WaitForSeconds(warningDuration);
+    }
+
+    if (voiceSource != null && voiceSource.isPlaying)
+        voiceSource.Stop();
+
+    if (captionPanel != null)
+        captionPanel.SetActive(false);
+
+    // Return camera to Rizal
+    if (cinemachineCamera != null && rizalCameraTarget != null)
+    {
+        cinemachineCamera.Follow = rizalCameraTarget;
+    }
+
+    ActivateDogDanger();
+}
     private void ActivateDogDanger()
     {
         dogIsDangerous = true;
