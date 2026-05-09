@@ -1,6 +1,8 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using TMPro;
+using Unity.Cinemachine;
 
 public class PacianoInteraction : MonoBehaviour
 {
@@ -24,6 +26,31 @@ public class PacianoInteraction : MonoBehaviour
     public float moveSpeed = 1.2f;
     public float stopDistance = 0.05f;
 
+    [Header("Notice Wall Movement")]
+    public Transform noticeWallMoveTarget;
+
+    [Header("Notice Wall Dialogue")]
+    [TextArea(2, 5)]
+    public string noticeWallLine =
+        "Paciano: They connect their names to the mutiny, but many still ask where the proof is.";
+
+    public AudioClip noticeWallVoice;
+    public float noticeWallDialogueDuration = 5f;
+
+    [Header("Notice Wall Camera")]
+    public CinemachineCamera cinemachineCamera;
+    public Transform rizalCameraTarget;
+    public Transform noticeWallCameraTarget;
+    public float noticeWallCameraHoldBeforeDialogue = 1f;
+
+    [Header("Notice Wall Camera Zoom")]
+    public float normalCameraSize = 5f;
+    public float noticeWallCameraSize = 3f;
+    public float zoomDuration = 0.5f;
+
+    [Header("Fact Popup")]
+    public FactPopupTrigger noticeFactTrigger;
+
     [Header("Visual Direction")]
     public Transform pacianoVisualRoot;
 
@@ -43,6 +70,11 @@ public class PacianoInteraction : MonoBehaviour
 
     private bool reachedDogTarget = false;
     private bool dogIntroTriggered = false;
+
+    private bool walkingToNoticeWall = false;
+    private bool reachedNoticeWall = false;
+    private bool noticeWallDialogueTriggered = false;
+    private bool noticeWallDialoguePlaying = false;
 
     private int currentDialogueIndex = 0;
     private Collider2D physicalCollider;
@@ -75,31 +107,36 @@ public class PacianoInteraction : MonoBehaviour
         if (Keyboard.current == null)
             return;
 
-        // First Paciano interaction before he walks to the dog
         if (playerNearby && !dialogueStarted && Keyboard.current.eKey.wasPressedThisFrame)
         {
             StartDialogue();
             return;
         }
 
-        // Continue first Paciano dialogue
         if (dialogueStarted && !dialogueFinished && Keyboard.current.eKey.wasPressedThisFrame)
         {
             GoToNextDialogue();
             return;
         }
 
-        // Paciano walking to dog target
         if (walkingToTarget)
         {
-            MovePacianoToTarget();
+            MovePacianoToDogTarget();
         }
 
-        // After Paciano reached the dog target, trigger dog warning once
-        // when Rizal approaches Paciano again.
+        if (walkingToNoticeWall)
+        {
+            MovePacianoToNoticeWall();
+        }
+
         if (reachedDogTarget && playerNearby && !dogIntroTriggered)
         {
             TriggerDogIntro();
+        }
+
+        if (reachedNoticeWall && playerNearby && !noticeWallDialogueTriggered && !noticeWallDialoguePlaying)
+        {
+            StartCoroutine(PlayNoticeWallDialogueRoutine());
         }
     }
 
@@ -175,17 +212,17 @@ public class PacianoInteraction : MonoBehaviour
         if (leadSign != null)
             leadSign.SetActive(true);
 
-        FaceMoveTarget();
+        FaceMoveTarget(moveTarget);
 
         SetPacianoAnimation(false, true);
     }
 
-    private void MovePacianoToTarget()
+    private void MovePacianoToDogTarget()
     {
         if (moveTarget == null)
             return;
 
-        FaceMoveTarget();
+        FaceMoveTarget(moveTarget);
 
         Vector3 targetPosition = new Vector3(
             moveTarget.position.x,
@@ -211,8 +248,8 @@ public class PacianoInteraction : MonoBehaviour
 
             SetPacianoAnimation(false, false);
 
-            // Do NOT start the dog intro here anymore.
-            // It will start only when Rizal approaches Paciano at the dog area.
+            // Do NOT re-enable Paciano's body collider here.
+            // InteractionZone will still trigger Rizal's approach.
         }
     }
 
@@ -226,16 +263,150 @@ public class PacianoInteraction : MonoBehaviour
         }
     }
 
-    private void FaceMoveTarget()
+    public void MoveToNoticeWallAfterDogSolved()
     {
-        if (moveTarget == null)
+        if (noticeWallMoveTarget == null)
             return;
 
-        if (moveTarget.position.x > transform.position.x)
+        if (walkingToNoticeWall || reachedNoticeWall)
+            return;
+
+        walkingToNoticeWall = true;
+        reachedDogTarget = false;
+
+        if (leadSign != null)
+            leadSign.SetActive(true);
+
+        if (physicalCollider != null)
+            physicalCollider.enabled = false;
+
+        FaceMoveTarget(noticeWallMoveTarget);
+        SetPacianoAnimation(false, true);
+    }
+
+    private void MovePacianoToNoticeWall()
+    {
+        if (noticeWallMoveTarget == null)
+            return;
+
+        FaceMoveTarget(noticeWallMoveTarget);
+
+        Vector3 targetPosition = new Vector3(
+            noticeWallMoveTarget.position.x,
+            transform.position.y,
+            transform.position.z
+        );
+
+        transform.position = Vector3.MoveTowards(
+            transform.position,
+            targetPosition,
+            moveSpeed * Time.deltaTime
+        );
+
+        float distance = Mathf.Abs(transform.position.x - noticeWallMoveTarget.position.x);
+
+        if (distance <= stopDistance)
+        {
+            walkingToNoticeWall = false;
+            reachedNoticeWall = true;
+
+            if (leadSign != null)
+                leadSign.SetActive(false);
+
+            SetPacianoAnimation(false, false);
+
+            // Do NOT re-enable Paciano's body collider here.
+            // Rizal must be able to pass through Paciano.
+        }
+    }
+
+    private IEnumerator PlayNoticeWallDialogueRoutine()
+    {
+        noticeWallDialogueTriggered = true;
+        noticeWallDialoguePlaying = true;
+
+        if (cinemachineCamera != null && noticeWallCameraTarget != null)
+        {
+            cinemachineCamera.Follow = noticeWallCameraTarget;
+            yield return StartCoroutine(ZoomCameraRoutine(noticeWallCameraSize));
+        }
+
+        yield return new WaitForSeconds(noticeWallCameraHoldBeforeDialogue);
+
+        if (captionPanel != null)
+            captionPanel.SetActive(true);
+
+        if (captionText != null)
+            captionText.text = noticeWallLine;
+
+        SetPacianoAnimation(true, false);
+
+        if (voiceSource != null && noticeWallVoice != null)
+        {
+            voiceSource.Stop();
+            voiceSource.clip = noticeWallVoice;
+            voiceSource.Play();
+
+            yield return new WaitForSeconds(noticeWallVoice.length);
+        }
+        else
+        {
+            yield return new WaitForSeconds(noticeWallDialogueDuration);
+        }
+
+        if (voiceSource != null && voiceSource.isPlaying)
+            voiceSource.Stop();
+
+        if (captionPanel != null)
+            captionPanel.SetActive(false);
+
+        SetPacianoAnimation(false, false);
+
+        if (cinemachineCamera != null && rizalCameraTarget != null)
+        {
+            yield return StartCoroutine(ZoomCameraRoutine(normalCameraSize));
+            cinemachineCamera.Follow = rizalCameraTarget;
+        }
+
+        noticeWallDialoguePlaying = false;
+
+        if (noticeFactTrigger != null)
+        {
+            noticeFactTrigger.EnableTrigger();
+        }
+    }
+
+    private IEnumerator ZoomCameraRoutine(float targetSize)
+    {
+    if (cinemachineCamera == null)
+        yield break;
+
+    float startSize = cinemachineCamera.Lens.OrthographicSize;
+    float elapsed = 0f;
+
+    while (elapsed < zoomDuration)
+    {
+        elapsed += Time.deltaTime;
+        float t = elapsed / zoomDuration;
+
+        cinemachineCamera.Lens.OrthographicSize = Mathf.Lerp(startSize, targetSize, t);
+
+        yield return null;
+    }
+
+    cinemachineCamera.Lens.OrthographicSize = targetSize;
+    }
+
+    private void FaceMoveTarget(Transform target)
+    {
+        if (target == null)
+            return;
+
+        if (target.position.x > transform.position.x)
         {
             FaceRight();
         }
-        else if (moveTarget.position.x < transform.position.x)
+        else if (target.position.x < transform.position.x)
         {
             FaceLeft();
         }
@@ -284,13 +455,21 @@ public class PacianoInteraction : MonoBehaviour
     {
         playerNearby = true;
 
-        // If Paciano is already at the dog area, do not show Press E anymore.
-        // The dog warning will trigger automatically.
         if (reachedDogTarget)
         {
             if (!dogIntroTriggered)
             {
                 TriggerDogIntro();
+            }
+
+            return;
+        }
+
+        if (reachedNoticeWall)
+        {
+            if (!noticeWallDialogueTriggered && !noticeWallDialoguePlaying)
+            {
+                StartCoroutine(PlayNoticeWallDialogueRoutine());
             }
 
             return;

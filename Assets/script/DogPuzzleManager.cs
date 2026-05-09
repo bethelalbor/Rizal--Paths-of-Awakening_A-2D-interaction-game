@@ -43,6 +43,9 @@ public class DogPuzzleManager : MonoBehaviour
     public float dogMoveSpeed = 2f;
     public float dogStopDistance = 0.1f;
 
+    [Header("Paciano After Dog Puzzle")]
+    public PacianoInteraction pacianoInteraction;
+
     [Tooltip("Check this if the dog faces the wrong way.")]
     public bool invertDogFacing = true;
 
@@ -308,18 +311,21 @@ public class DogPuzzleManager : MonoBehaviour
         float distance = Mathf.Abs(dog.position.x - boneTargetPosition.x);
 
         if (distance <= dogStopDistance)
-        {
-            dogMovingToBone = false;
+      {
+          dogMovingToBone = false;
 
-            SetDogWalking(false);
-            SetDogSniffing(true);
+          SetDogWalking(false);
+          SetDogSniffing(true);
 
-            if (dogBlockCollider != null)
-                dogBlockCollider.enabled = false;
+          if (dogBlockCollider != null)
+              dogBlockCollider.enabled = false;
 
-            if (dogBiteTrigger != null)
-                dogBiteTrigger.enabled = false;
-        }
+          if (dogBiteTrigger != null)
+              dogBiteTrigger.enabled = false;
+
+          if (pacianoInteraction != null)
+              pacianoInteraction.MoveToNoticeWallAfterDogSolved();
+      }
     }
 
     private void ForceDogIdle()
