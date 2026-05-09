@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 3
+  tags:
+  - Guard
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - 
+  - Water
+  - UI
+  - Ground
+  - Pickable
+  - Guard
+  - Player
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0
+  - name: BG3
+    uniqueID: 1545950745
+    locked: 0
+  - name: BG2
+    uniqueID: 2528797473
+    locked: 0
+  - name: BG1
+    uniqueID: 3889041005
+    locked: 0
+  - name: foreground
+    uniqueID: 2182862005
+    locked: 0
+  - name: Interactibles
+    uniqueID: 1377122901
+    locked: 0
+  - name: Player
+    uniqueID: 1420202523
+    locked: 0
+  - name: front
+    uniqueID: 3763613937
+    locked: 0
+  m_RenderingLayers:
+  - Default
+  m_MigratedRenderPipelines: []
