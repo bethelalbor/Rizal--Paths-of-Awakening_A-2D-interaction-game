@@ -43,6 +43,9 @@ public class DogPuzzleManager : MonoBehaviour
     public float dogMoveSpeed = 2f;
     public float dogStopDistance = 0.1f;
 
+    [Header("Dog Bark Sound")]
+    public AudioSource dogBarkSource;
+
     [Header("Paciano After Dog Puzzle")]
     public PacianoInteraction pacianoInteraction;
 
@@ -61,6 +64,10 @@ public class DogPuzzleManager : MonoBehaviour
     public Transform rizalCameraTarget;
     public Transform dogCameraTarget;
     public float cameraHoldDuration = 1.5f;
+
+    [Header("Fail Sound")]
+    public AudioSource failSoundSource;
+    public AudioClip failSoundClip;
 
     [Header("Testing")]
     public bool activateDogDangerAtStartForTesting = false;
@@ -161,6 +168,26 @@ public class DogPuzzleManager : MonoBehaviour
 
     ActivateDogDanger();
 }
+
+    private void StartDogBarkingSound()
+    {
+        if (dogBarkSource == null)
+            return;
+
+        if (!dogBarkSource.isPlaying)
+            dogBarkSource.Play();
+    }
+
+    private void StopDogBarkingSound()
+    {
+        if (dogBarkSource == null)
+            return;
+
+        if (dogBarkSource.isPlaying)
+            dogBarkSource.Stop();
+    }
+
+
     private void ActivateDogDanger()
     {
         dogIsDangerous = true;
@@ -174,6 +201,8 @@ public class DogPuzzleManager : MonoBehaviour
             dogBlockCollider.enabled = true;
 
         ForceDogIdle();
+
+        StartDogBarkingSound();
     }
 
     public void TriggerDogAttack()
@@ -207,11 +236,30 @@ public class DogPuzzleManager : MonoBehaviour
         else
             Debug.LogWarning("DogPuzzleManager: Fail Text is not assigned.");
 
+        PlayFailSound();
+
         if (biteRoutine != null)
             StopCoroutine(biteRoutine);
 
         biteRoutine = StartCoroutine(PlayBiteOnceRoutine());
     }
+
+
+    private void PlayFailSound()
+    {
+        if (failSoundSource == null)
+            return;
+
+        failSoundSource.Stop();
+
+        if (failSoundClip != null)
+        {
+            failSoundSource.clip = failSoundClip;
+        }
+
+        failSoundSource.Play();
+    }
+
 
     private IEnumerator PlayBiteOnceRoutine()
     {
@@ -234,6 +282,10 @@ public class DogPuzzleManager : MonoBehaviour
 
     public void RetryAfterDogFail()
     {
+        if (failSoundSource != null && failSoundSource.isPlaying)
+        failSoundSource.Stop();
+
+        
         if (failPanel != null)
             failPanel.SetActive(false);
 
@@ -265,6 +317,8 @@ public class DogPuzzleManager : MonoBehaviour
 
     public void DistractDog(Vector3 thrownBonePosition)
     {
+        StopDogBarkingSound();
+
         if (dogIsDistracted)
             return;
 

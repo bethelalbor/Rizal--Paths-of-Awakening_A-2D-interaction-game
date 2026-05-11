@@ -9,6 +9,10 @@ public class FactPopupManager : MonoBehaviour
     public PlayerController playerController;
     public RizalPickupThrow pickupThrowScript;
 
+    [Header("Popup Sound")]
+    public AudioSource popupSoundSource;
+    public AudioClip popupSoundClip;
+
     private bool popupOpen = false;
 
     void Start()
@@ -26,6 +30,8 @@ public class FactPopupManager : MonoBehaviour
 
         if (factPopupPanel != null)
             factPopupPanel.SetActive(true);
+
+        PlayPopupSound();
 
         if (playerController != null)
             playerController.SetCanMove(false);
@@ -50,5 +56,18 @@ public class FactPopupManager : MonoBehaviour
             pickupThrowScript.enabled = true;
 
         popupOpen = false;
+    }
+
+    private void PlayPopupSound()
+    {
+        if (popupSoundSource == null)
+            return;
+
+        popupSoundSource.Stop();
+
+        if (popupSoundClip != null)
+            popupSoundSource.clip = popupSoundClip;
+
+        popupSoundSource.Play();
     }
 }

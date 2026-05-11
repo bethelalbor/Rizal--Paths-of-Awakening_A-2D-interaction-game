@@ -3,40 +3,47 @@ using UnityEngine.InputSystem;
 
 public class RizalPickupThrow : MonoBehaviour
 {
+    [Header("Pickup / Throw")]
     public Transform holdPoint;
     public float pickupRange = 1.2f;
     public float throwSpeedX = 6f;
     public float defaultThrowSpeedY = 4f;
     public LayerMask pickableLayer;
 
+    [Header("Trajectory")]
     public LineRenderer trajectoryLine;
     public int trajectoryPoints = 20;
     public float timeStep = 0.1f;
 
+    [Header("Automatic Aim While Holding E")]
     public float minThrowSpeedY = 1.5f;
     public float maxThrowSpeedY = 8f;
-    public float aimAdjustSpeed = 4f;
+    public float aimCycleSpeed = 2f;
 
     [Header("Throw Collision Ignore")]
     public Collider2D[] extraThrowIgnoreColliders;
 
-    // Turn this on if your sprite faces the opposite direction visually
+    [Header("UI Guide")]
+    public GameObject throwGuideSign;
+
     public bool invertFacingDirection = false;
 
     private GameObject heldObject;
     private Rigidbody2D heldRb;
     private Collider2D heldCollider;
-    private SpriteRenderer playerSprite;
 
     private GameObject nearbyObject;
     private SpriteRenderer nearbySprite;
     private Color originalNearbyColor;
 
     private float currentThrowSpeedY;
+    private float aimTimer;
+
+    private bool mustReleaseEAfterPickup = false;
+    private bool isAimingThrow = false;
 
     void Start()
     {
-        playerSprite = GetComponent<SpriteRenderer>();
         currentThrowSpeedY = defaultThrowSpeedY;
 
         if (trajectoryLine != null)
@@ -44,6 +51,9 @@ public class RizalPickupThrow : MonoBehaviour
             trajectoryLine.enabled = false;
             trajectoryLine.positionCount = trajectoryPoints;
         }
+
+        if (throwGuideSign != null)
+            throwGuideSign.SetActive(false);
     }
 
     void Update()
@@ -56,49 +66,69 @@ public class RizalPickupThrow : MonoBehaviour
         if (Keyboard.current.eKey.wasPressedThisFrame && heldObject == null)
         {
             TryPickup();
+            return;
         }
 
         if (heldObject != null)
         {
-            if (Keyboard.current.qKey.isPressed)
-            {
-                AdjustAim();
-
-                if (trajectoryLine != null)
-                {
-                    trajectoryLine.enabled = true;
-                    DrawTrajectory();
-                }
-            }
-
-            if (Keyboard.current.qKey.wasReleasedThisFrame)
-            {
-                ThrowObject();
-            }
+            HandleThrowControls();
         }
     }
 
     void LateUpdate()
     {
-        if (heldObject != null)
+        if (heldObject != null && holdPoint != null)
         {
             heldObject.transform.position = holdPoint.position;
         }
     }
 
-    void AdjustAim()
+    void HandleThrowControls()
     {
-        if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed)
+        // After picking up, player must release E once.
+        // This prevents instant throw from the same E press used to pick up.
+        if (mustReleaseEAfterPickup)
         {
-            currentThrowSpeedY += aimAdjustSpeed * Time.deltaTime;
+            if (!Keyboard.current.eKey.isPressed)
+            {
+                mustReleaseEAfterPickup = false;
+            }
+
+            return;
         }
 
-        if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed)
+        // Hold E to aim. The trajectory height moves automatically.
+        if (Keyboard.current.eKey.isPressed)
         {
-            currentThrowSpeedY -= aimAdjustSpeed * Time.deltaTime;
+            isAimingThrow = true;
+
+            AutoAdjustAim();
+
+            if (trajectoryLine != null)
+            {
+                trajectoryLine.enabled = true;
+                DrawTrajectory();
+            }
         }
 
-        currentThrowSpeedY = Mathf.Clamp(currentThrowSpeedY, minThrowSpeedY, maxThrowSpeedY);
+        // Release E to throw using the last visible trajectory.
+        if (isAimingThrow && Keyboard.current.eKey.wasReleasedThisFrame)
+        {
+            ThrowObject();
+        }
+    }
+
+    void AutoAdjustAim()
+    {
+        aimTimer += Time.deltaTime * aimCycleSpeed;
+
+        float t = (Mathf.Sin(aimTimer) + 1f) / 2f;
+
+        currentThrowSpeedY = Mathf.Lerp(
+            minThrowSpeedY,
+            maxThrowSpeedY,
+            t
+        );
     }
 
     float GetFacingDirection()
@@ -112,11 +142,19 @@ public class RizalPickupThrow : MonoBehaviour
         if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed)
             return 1f;
 
-        return transform.localScale.x < 0 ? -1f : 1f;
+        float direction = transform.localScale.x < 0 ? -1f : 1f;
+
+        if (invertFacingDirection)
+            direction *= -1f;
+
+        return direction;
     }
 
     void CheckNearbyPickable()
     {
+        if (heldObject != null)
+            return;
+
         Collider2D hit = Physics2D.OverlapCircle(transform.position, pickupRange, pickableLayer);
 
         if (hit != null)
@@ -156,27 +194,35 @@ public class RizalPickupThrow : MonoBehaviour
     {
         Collider2D hit = Physics2D.OverlapCircle(transform.position, pickupRange, pickableLayer);
 
-        if (hit != null)
+        if (hit == null)
+            return;
+
+        heldObject = hit.gameObject;
+        heldRb = heldObject.GetComponent<Rigidbody2D>();
+        heldCollider = heldObject.GetComponent<Collider2D>();
+
+        ResetNearbyGlow();
+
+        currentThrowSpeedY = defaultThrowSpeedY;
+        aimTimer = 0f;
+
+        if (heldRb != null)
         {
-            heldObject = hit.gameObject;
-            heldRb = heldObject.GetComponent<Rigidbody2D>();
-            heldCollider = heldObject.GetComponent<Collider2D>();
-
-            ResetNearbyGlow();
-            currentThrowSpeedY = defaultThrowSpeedY;
-
-            if (heldRb != null)
-            {
-                heldRb.linearVelocity = Vector2.zero;
-                heldRb.angularVelocity = 0f;
-                heldRb.bodyType = RigidbodyType2D.Kinematic;
-            }
-
-            if (heldCollider != null)
-            {
-                heldCollider.isTrigger = true;
-            }
+            heldRb.linearVelocity = Vector2.zero;
+            heldRb.angularVelocity = 0f;
+            heldRb.bodyType = RigidbodyType2D.Kinematic;
         }
+
+        if (heldCollider != null)
+        {
+            heldCollider.isTrigger = true;
+        }
+
+        mustReleaseEAfterPickup = true;
+        isAimingThrow = false;
+
+        if (throwGuideSign != null)
+            throwGuideSign.SetActive(true);
     }
 
     void ThrowObject()
@@ -188,15 +234,17 @@ public class RizalPickupThrow : MonoBehaviour
         {
             heldCollider.isTrigger = false;
         }
+
         IgnoreThrowCollisions();
 
         heldRb.bodyType = RigidbodyType2D.Dynamic;
 
         float direction = GetFacingDirection();
 
-
-        // Set the exact launch velocity so the throw matches the preview more closely
-        heldRb.linearVelocity = new Vector2(direction * throwSpeedX, currentThrowSpeedY);
+        heldRb.linearVelocity = new Vector2(
+            direction * throwSpeedX,
+            currentThrowSpeedY
+        );
 
         RockHitGuard rockHitGuard = heldObject.GetComponent<RockHitGuard>();
         if (rockHitGuard != null)
@@ -214,43 +262,46 @@ public class RizalPickupThrow : MonoBehaviour
         heldRb = null;
         heldCollider = null;
 
+        isAimingThrow = false;
+        mustReleaseEAfterPickup = false;
+
         if (trajectoryLine != null)
             trajectoryLine.enabled = false;
-    }
 
+        if (throwGuideSign != null)
+            throwGuideSign.SetActive(false);
+    }
 
     void IgnoreThrowCollisions()
     {
-    if (heldCollider == null)
-        return;
+        if (heldCollider == null)
+            return;
 
-    // Ignore collision with Rizal's own colliders
-    Collider2D[] playerColliders = GetComponentsInChildren<Collider2D>();
+        Collider2D[] playerColliders = GetComponentsInChildren<Collider2D>();
 
-    foreach (Collider2D playerCol in playerColliders)
-    {
-        if (playerCol != null && playerCol != heldCollider)
+        foreach (Collider2D playerCol in playerColliders)
         {
-            Physics2D.IgnoreCollision(heldCollider, playerCol, true);
-        }
-    }
-
-    // Ignore collision with assigned objects such as the dog collider
-    if (extraThrowIgnoreColliders != null)
-    {
-        foreach (Collider2D col in extraThrowIgnoreColliders)
-        {
-            if (col != null)
+            if (playerCol != null && playerCol != heldCollider)
             {
-                Physics2D.IgnoreCollision(heldCollider, col, true);
+                Physics2D.IgnoreCollision(heldCollider, playerCol, true);
             }
         }
-    }
+
+        if (extraThrowIgnoreColliders != null)
+        {
+            foreach (Collider2D col in extraThrowIgnoreColliders)
+            {
+                if (col != null)
+                {
+                    Physics2D.IgnoreCollision(heldCollider, col, true);
+                }
+            }
+        }
     }
 
     void DrawTrajectory()
     {
-        if (heldObject == null || trajectoryLine == null || heldRb == null)
+        if (heldObject == null || trajectoryLine == null || heldRb == null || holdPoint == null)
             return;
 
         float direction = GetFacingDirection();
@@ -258,7 +309,6 @@ public class RizalPickupThrow : MonoBehaviour
         Vector2 startPos = holdPoint.position;
         Vector2 startVelocity = new Vector2(direction * throwSpeedX, currentThrowSpeedY);
 
-        // Use the rigidbody's gravityScale so the line matches the object better
         Vector2 gravity = Physics2D.gravity * heldRb.gravityScale;
 
         Vector3[] points = new Vector3[trajectoryPoints];
@@ -267,7 +317,8 @@ public class RizalPickupThrow : MonoBehaviour
         {
             float t = i * timeStep;
             Vector2 point = startPos + startVelocity * t + 0.5f * gravity * t * t;
-            points[i] = point;
+
+            points[i] = new Vector3(point.x, point.y, -1f);
         }
 
         trajectoryLine.positionCount = trajectoryPoints;
